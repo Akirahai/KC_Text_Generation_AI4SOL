@@ -27,25 +27,95 @@ import pyperclip
 import ast
 
 
+def compute_metrics(eval_pred):
+    predictions, labels = eval_pred
+    
+    # # Debugging lines to understand the structure
+    # print(f"Predictions type: {type(predictions)}")
+    # print(f"Predictions content: {predictions}")
+    
+    # print(f"Labels type: {type(labels)}")
+    # print(f"Labels content: {labels}")
+    if isinstance(predictions, tuple):
+        predictions = predictions[0]  # Assuming the first element contains the logits
+    
 
-def change_kc_label(kc_label, question_number):
-    kc_list = []
-    for kc in kc_label[kc_label['Question Number'] == question_number]['KC applied'].values:
-        a = kc.split(',')
-        a = [x.strip() for x in a]
-        kc_list.append(a)
-    return kc_list
+    # Ensure predictions is a numpy array
+    predictions = np.array(predictions)
+    
+    try:
+        predictions = np.argmax(predictions, axis=1)
+    except ValueError as e:
+        print(f"ValueError: {e}")
+        print("Predictions array has inconsistent shapes. Debugging...")
+        print(predictions)
+        raise e
 
-def change_step(kc_label, question_number):
-    step_list = []
-    for step in kc_label[kc_label['Question Number'] == question_number]['Step'].values:
-        step_list.append(step)
-    return step_list
+    accuracy = (predictions == labels).mean()
+    return {'accuracy': accuracy}
+
+def compute_top_k_accuracy(preds, labels, k=1):
+    
+    if isinstance(preds, tuple):
+        preds = preds[0]
+        
+    top_k_preds = np.argsort(preds, axis=1)[:, -k:]
+    top_k_accuracy = np.any(top_k_preds == np.expand_dims(labels, axis=1), axis=1).mean()
+    return top_k_accuracy
+
+def preprocess_function(examples, tokenizer, max_length=512):
+    return tokenizer(examples["Question"], truncation=True, padding = 'max_length', max_length=max_length)
 
 
 
 
 
+
+class KC_Chain_Of_Thought_Classification:
+
+    def __init__(self, question, solution, step, model):
+        self.question = question
+        self.solution = solution
+        self.step = step
+        self.model = model
+
+    def get_list_kcs(self):
+        sys_message = f"""
+            You are a professional teacher adhering to the Common Core standards, teaching Mathematics to students from Grade 1 to Grade 6. \
+            Your task is to carefully analyze the problem presented, including the question, solution, and steps. Based on this analysis, \
+            identify the most suitable Knowledge Components (KCs) from Common Core standards required to solve the problem. \
+            You must provide each KC in the exact code format and then explain, step-by-step, why it was chosen. \
+            Ensure that the explanation shows how the problem's elements relate to the specific concepts or skills defined by the KC.
+            """
+
+        content = f"""
+        Analyze the following problem to identify the required Knowledge Components:
+
+        **Question:** "{self.question}"
+        **Solution:** "{self.solution}"
+        **Steps Taken:** "{self.step}"
+
+        Please provide:
+        1. A detailed analysis of the problem.
+        2. The identified Knowledge Components
+        3. A step-by-step explanation of why each KC is relevant, clearly linking the problem's elements to the KC.
+        """
+
+
+
+        messages = [
+            {"role": "system", "content": sys_message},
+            {"role": "user", "content": content}
+        ]
+        pipe = pipeline("text-generation", model= model)
+        response = pipe(messages, max_new_tokens=200)  # Limit output to 50 new tokens
+        reply = response[0]['generated_text'][2]['content']
+
+        # Extract all unique KCs from the reply
+        kcs = re.findall(r'\d+\.\w+\.\w+\.\d+', reply)
+        kcs = list(set(kcs))
+
+        return reply, kcs
 
 
 

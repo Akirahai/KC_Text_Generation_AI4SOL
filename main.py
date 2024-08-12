@@ -68,3 +68,34 @@ if __name__== "__main__":
         
     results = []
     current_time = args.experiment
+    
+        
+    for model_name in args.models:
+        
+        # Load model
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+            
+        # Using AutoModel for Text Generation Task
+        
+        
+        if tokenizer.pad_token is None:
+            print("Adding padding token to tokenizer...")
+            tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+            model.resize_token_embeddings(len(tokenizer))
+            tokenizer.pad_token = tokenizer.eos_token
+            
+        # Load data
+        df_train =pd.read_csv(f'data_second_ver/full_train_set_31.csv')
+        df_test =pd.read_csv(f'data_second_ver/full_{args.samples}_test_set.csv')
+        # df_valid =pd.read_csv('data/Grade_data_valid_set.csv')
+        
+        dataset_train = Dataset.from_pandas(df_train[['Question', 'Full Reply']])
+        dataset_test = Dataset.from_pandas(df_test[['Question']])
+        # dataset_valid = Dataset.from_pandas(df_valid)
+        
+        # Tokenization
+        max_length = 512  # Set your fixed max length
+        tokenized_dataset_train = dataset_train.map(lambda x: preprocess_function(x, tokenizer, max_length=max_length), batched=True)
+        tokenized_dataset_test = dataset_test.map(lambda x: preprocess_function(x, tokenizer, max_length=max_length), batched=True)
+        
