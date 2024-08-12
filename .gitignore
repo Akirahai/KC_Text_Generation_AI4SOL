@@ -1,0 +1,8 @@
+.env
+/result/*
+__pycache__/
+.vscode/
+/utils/__pycache__/
+Baseline_testing_API.ipynb
+Fulltraining_API.ipynb
+/api/*
